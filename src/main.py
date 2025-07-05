@@ -1,13 +1,20 @@
 import os
 import shutil
+import sys
 
-from extract_title import generate_page
+from extract_title import extract_title
+from markdown_to_html import markdown_to_html_node
 
 
 def main():
-    shutil.rmtree("public")
-    copy_recursive("static", "public")
-    generate_page_recursive("content", "template.html", "public")
+    basepath = ""
+    if len(sys.argv) <2:
+        basepath = "/"
+    else:
+        basepath = sys.argv[1]
+    shutil.rmtree("docs")
+    copy_recursive("static", "docs")
+    generate_page_recursive(basepath, "content", "template.html", "docs")
 
 
 def copy_recursive(src_dir, dst_dir, is_root=True):
@@ -27,17 +34,39 @@ def copy_recursive(src_dir, dst_dir, is_root=True):
         else:
             copy_recursive(full_path, full_dst_path, is_root=False)
 
-def generate_page_recursive(dir_path_content, template_path, dest_dir_path):
-    content_list = os.listdir(path = dir_path_content)
+def generate_page_recursive(basepath, content_dir_path, template_path, dest_dir_path):
+    content_list = os.listdir(path = content_dir_path)
     for file in content_list:
-        full_path = os.path.join(dir_path_content, file)
+        full_path = os.path.join(content_dir_path, file)
         full_dest_path = os.path.join(dest_dir_path, file)
         dest_html_path = full_dest_path.replace(".md", ".html")
         if os.path.isfile(full_path):
-            generate_page(full_path, template_path, dest_html_path)
+            generate_page(basepath, full_path, template_path, dest_html_path)
         else:
             os.mkdir(dest_html_path)
-            generate_page_recursive(full_path, template_path, dest_html_path)
+            generate_page_recursive(basepath, full_path, template_path, dest_html_path)
+
+def generate_page(basepath, content_dir_path, template_path, dest_path):
+    print(f"Generating page from {content_dir_path} to {dest_path} using {template_path}")
+    markdown_from = None
+    markdown_template = None
+    with open(content_dir_path, encoding="utf-8") as f:
+        markdown_from = f.read()
+    with open(template_path, encoding="utf-8") as f:
+        markdown_template = f.read() 
+    from_node = markdown_to_html_node(markdown_from).to_html()
+    title = extract_title(markdown_from)
+
+    title_replace = markdown_template.replace("{{ Title }}", title)
+    content_replace = title_replace.replace("{{ Content }}", from_node)
+    href_replace = content_replace.replace('href="/', f'href="{basepath}')
+    src_replace = href_replace.replace('src="/', f'src="{basepath}')
+
+    if not os.path.exists(dest_path):
+        full_path = os.path.dirname(dest_path)
+        os.makedirs(full_path, exist_ok=True)
+    with open(dest_path, "w", encoding="utf-8") as f:
+        f.write(src_replace)
 
 
 
